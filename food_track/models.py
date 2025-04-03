@@ -103,15 +103,15 @@ class TrucksForMission(models.Model):
 
 class Mission(models.Model):
     MISSION_TYPES = [
-        ('specialized_delivery', 'Specialized Delivery'),
-        ('regular_scheduled', 'Regular Scheduled'),
+        ('specialized', 'Specialized Delivery'),
+        ('regular', 'Regular Scheduled'),
         ('emergency', 'Emergency')
     ]
 
     STATUS_CHOICES = [
-        ('planned', 'Planned'),
-        ('completed', 'Completed'),
-        ('active', 'Active'),
+        ('pending', 'Pending'),
+        ('Completed', 'Completed'),
+        ('Active', 'Active'),
     ]
 
     mission_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
@@ -132,7 +132,6 @@ class VendorMission(models.Model):
     unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE)
     mission = models.ForeignKey(Mission, on_delete=models.CASCADE)
-    driver = models.ForeignKey(Driver, on_delete=models.CASCADE)
 
 class OperationRegion(models.Model):
     unique_id = models.UUIDField(unique=True, default=uuid.uuid4)

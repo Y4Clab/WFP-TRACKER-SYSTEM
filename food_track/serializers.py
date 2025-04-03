@@ -138,12 +138,12 @@ class MissionGetSerializer(serializers.ModelSerializer):
 class VendorMissionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = VendorMission
-        fields = ['vendor', 'mission', 'driver']
+        fields = ['vendor', 'mission']
 
 class VendorMissionGetSerializer(serializers.ModelSerializer):
     vendor = VendorGetSerializer()
     mission = MissionGetSerializer()
-    driver = DriverGetSerializer()
+    # driver = DriverGetSerializer()
 
     class Meta:
         model = VendorMission
