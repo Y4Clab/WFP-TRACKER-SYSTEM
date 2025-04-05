@@ -1,11 +1,11 @@
 from django.db import models
 import uuid
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 import os
 
 # Create your models here.
-
 class Vendor(models.Model):
     VENDOR_TYPES = [
         ('food_supplier', 'Food Supplier'),
@@ -62,6 +62,17 @@ class CargoItems(models.Model):
     cargo = models.ForeignKey(Cargo, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
+    
+    @property
+    def remaining_quantity(self):
+        """Calculate remaining quantity after allocations to trucks"""
+        assigned = TruckCargoItem.objects.filter(cargo_item=self).aggregate(
+            models.Sum('transferring_quantity')
+        )['transferring_quantity__sum'] or 0
+        return self.quantity - assigned
+    
+    def __str__(self):
+        return f"{self.product.name} - {self.quantity}"
 
 class Region(models.Model):
     unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
@@ -69,18 +80,11 @@ class Region(models.Model):
 
 class Contact(models.Model):
     contact_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
-    first_name = models.CharField(max_length=255)
-    last_name = models.CharField(max_length=255)
-    phone_number = models.CharField(max_length=20, unique=True)
-    email = models.EmailField(unique=True)
-    address = models.TextField()
-    city = models.CharField(max_length=100)
-    country = models.CharField(max_length=100)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE)
 
-
     def __str__(self):
-        return f'{self.first_name} {self.last_name}'
+        return f'{self.user.first_name} {self.user.last_name}'
 
 class Truck(models.Model):
     STATUS_CHOICES = [
@@ -100,6 +104,47 @@ class TrucksForMission(models.Model):
     unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     mission = models.ForeignKey("Mission", on_delete=models.CASCADE)
     truck = models.ForeignKey(Truck, on_delete=models.CASCADE)
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE)
+    
+    def __str__(self):
+        return f"{self.truck.vehicle_name} for {self.mission.title}"
+
+class TruckCargoItem(models.Model):
+    """
+    Intermediate model to track the quantity of each cargo item assigned to a truck
+    """
+    unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    truck_mission = models.ForeignKey(TrucksForMission, on_delete=models.CASCADE, related_name="truck_cargo_items")
+    cargo_item = models.ForeignKey(CargoItems, on_delete=models.CASCADE, related_name="truck_allocations")
+    transferring_quantity = models.PositiveIntegerField(
+        help_text="Quantity of this cargo item being transferred by this truck"
+    )
+    
+    class Meta:
+        unique_together = ('truck_mission', 'cargo_item')
+        
+    def clean(self):
+        """Validate that transferring quantity doesn't exceed available quantity"""
+        if self.cargo_item and self.transferring_quantity:
+            # Get total allocated to other trucks
+            other_allocations = TruckCargoItem.objects.filter(
+                cargo_item=self.cargo_item
+            ).exclude(id=self.id).aggregate(
+                models.Sum('transferring_quantity')
+            )['transferring_quantity__sum'] or 0
+            
+            available = self.cargo_item.quantity - other_allocations
+            if self.transferring_quantity > available:
+                raise ValidationError({
+                    'transferring_quantity': f'Exceeds available quantity. Only {available} units available.'
+                })
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.truck_mission} - {self.cargo_item.product.name} ({self.transferring_quantity})"
 
 class Mission(models.Model):
     MISSION_TYPES = [
