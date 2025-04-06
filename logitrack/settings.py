@@ -27,13 +27,13 @@ SECRET_KEY = 'django-insecure-vfk7_nn09*2hj7bgw!!on+n((@(y!k^=a%=@xnn=m%_jmrybp3
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     'http://192.168.100.4:8080',
     'http://127.0.0.1:8080',
     'http://localhost:8080'
     
 ]
-
 
 # Application definition
 
@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'djoser',
     'Accounts',
     'food_track',
+    'drf_yasg',
     'rest_framework'
 ]
 

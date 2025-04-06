@@ -8,12 +8,71 @@ from rest_framework.decorators import action
 from django.contrib.auth.models import User
 from .models import *
 from food_track.serializers import *
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
+# Import documentation decorators
+from food_track.docs.decorators import (
+    vendor_create_docs, truck_create_docs, truck_mission_assignment_docs,
+    cargo_assignment_docs, vendor_data_docs
+)
 
 # Create your views here.
 
 
 # Base ViewSet to handle separate serializers for create and retrieve
 class BaseViewSet(viewsets.ModelViewSet):
+    """
+    Base ViewSet for handling separate serializers for create/update and retrieve operations.
+    Uses unique_id as the lookup field instead of the default pk.
+    """
+    
+    @swagger_auto_schema(
+        operation_description="List all objects",
+        responses={200: "Success"}
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        operation_description="Retrieve a specific object by its unique_id",
+        responses={200: "Success", 404: "Object not found"}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        operation_description="Create a new object",
+        responses={201: "Object created successfully", 400: "Invalid data"}
+    )
+    def create(self, request, *args, **kwargs):
+        create_serializer = self.create_serializer_class(data=request.data)
+        create_serializer.is_valid(raise_exception=True)
+        instance = create_serializer.save()  # Save using create serializer
+        response_serializer = self.get_serializer_class_attr(instance)  # Use get serializer for response
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+    
+    @swagger_auto_schema(
+        operation_description="Update an object completely",
+        responses={200: "Object updated successfully", 400: "Invalid data", 404: "Object not found"}
+    )
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        operation_description="Partially update an object",
+        responses={200: "Object updated successfully", 400: "Invalid data", 404: "Object not found"}
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        operation_description="Delete an object",
+        responses={204: "Object deleted successfully", 404: "Object not found"}
+    )
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+    
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             return self.create_serializer_class
@@ -26,13 +85,6 @@ class BaseViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset()
         filter_kwargs = {"unique_id": self.kwargs["pk"]}  # Look up by unique_id
         return get_object_or_404(queryset, **filter_kwargs)
-    
-    def create(self, request, *args, **kwargs):
-        create_serializer = self.create_serializer_class(data=request.data)
-        create_serializer.is_valid(raise_exception=True)
-        instance = create_serializer.save()  # Save using create serializer
-        response_serializer = self.get_serializer_class_attr(instance)  # Use get serializer for response
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     # Helper method to get vendor for the authenticated user
     def get_vendor_for_user(self):
@@ -44,14 +96,28 @@ class BaseViewSet(viewsets.ModelViewSet):
 
 
 class VendorViewSet(BaseViewSet):
+    """
+    API endpoints for managing Vendor resources.
+    
+    Vendors are organizations providing transportation services.
+    """
     queryset = Vendor.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = VendorCreateSerializer
     get_serializer_class_attr = VendorGetSerializer
+    
+    @vendor_create_docs
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
 
 
 class ProductViewSet(BaseViewSet):
+    """
+    API endpoints for managing Product resources.
+    
+    Products are items that can be transported as cargo.
+    """
     queryset = Product.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = ProductCreateSerializer
@@ -60,6 +126,11 @@ class ProductViewSet(BaseViewSet):
 
 
 class DriverViewSet(BaseViewSet):
+    """
+    API endpoints for managing Driver resources.
+    
+    Drivers are individuals operating trucks for transportation.
+    """
     queryset = Driver.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = DriverCreateSerializer
@@ -68,6 +139,11 @@ class DriverViewSet(BaseViewSet):
 
 
 class CargoViewSet(BaseViewSet):
+    """
+    API endpoints for managing Cargo resources.
+    
+    Cargo represents collections of items to be transported.
+    """
     queryset = Cargo.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = CargoCreateSerializer
@@ -76,6 +152,11 @@ class CargoViewSet(BaseViewSet):
 
 
 class CargoItemsViewSet(BaseViewSet):
+    """
+    API endpoints for managing CargoItems resources.
+    
+    CargoItems are individual items within a cargo shipment.
+    """
     queryset = CargoItems.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = CargoItemsCreateSerializer
@@ -84,6 +165,11 @@ class CargoItemsViewSet(BaseViewSet):
 
 
 class RegionViewSet(BaseViewSet):
+    """
+    API endpoints for managing Region resources.
+    
+    Regions represent geographical areas for operations.
+    """
     queryset = Region.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = RegionCreateSerializer
@@ -92,6 +178,11 @@ class RegionViewSet(BaseViewSet):
 
 
 class ContactViewSet(BaseViewSet):
+    """
+    API endpoints for managing Contact resources.
+    
+    Contacts are individuals associated with vendors.
+    """
     queryset = Contact.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = ContactCreateSerializer
@@ -100,22 +191,45 @@ class ContactViewSet(BaseViewSet):
 
 
 class TruckViewSet(BaseViewSet):
+    """
+    API endpoints for managing Truck resources.
+    
+    Trucks are vehicles used for transportation.
+    """
     queryset = Truck.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = TruckCreateSerializer
     get_serializer_class_attr = TruckGetSerializer
+    
+    @truck_create_docs
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
 
 
 class TrucksForMissionViewSet(BaseViewSet):
+    """
+    API endpoints for managing TrucksForMission resources.
+    
+    TrucksForMission represent assignments of trucks to specific missions.
+    """
     queryset = TrucksForMission.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = TrucksForMissionCreateSerializer
     get_serializer_class_attr = TrucksForMissionGetSerializer
+    
+    @truck_mission_assignment_docs
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
 
 
 class MissionViewSet(BaseViewSet):
+    """
+    API endpoints for managing Mission resources.
+    
+    Missions are transportation tasks from origin to destination.
+    """
     queryset = Mission.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = MissionCreateSerializer
@@ -124,6 +238,11 @@ class MissionViewSet(BaseViewSet):
 
 
 class VendorMissionViewSet(BaseViewSet):
+    """
+    API endpoints for managing VendorMission resources.
+    
+    VendorMissions associate vendors with specific missions.
+    """
     queryset = VendorMission.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = VendorMissionCreateSerializer
@@ -132,6 +251,11 @@ class VendorMissionViewSet(BaseViewSet):
 
 
 class OperationRegionViewSet(BaseViewSet):
+    """
+    API endpoints for managing OperationRegion resources.
+    
+    OperationRegions define geographical areas where vendors operate.
+    """
     queryset = OperationRegion.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = OperationRegionCreateSerializer
@@ -140,6 +264,11 @@ class OperationRegionViewSet(BaseViewSet):
 
 
 class DocumentsAndAgreementsViewSet(BaseViewSet):
+    """
+    API endpoints for managing DocumentsAndAgreements resources.
+    
+    Documents and agreements associated with vendors.
+    """
     queryset = DocumentsAndAgreements.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = DocumentsAndAgreementsCreateSerializer
@@ -155,6 +284,7 @@ class VendorUserDataView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @vendor_data_docs
     def get(self, request):
         # Get the logged in user
         user = request.user
@@ -203,6 +333,13 @@ class VendorDataByIdView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @swagger_auto_schema(
+        responses={
+            200: openapi.Response("Vendor data retrieved successfully"),
+            404: "Vendor not found"
+        },
+        operation_description="Get all data related to a specific vendor by ID (admin function)"
+    )
     def get(self, request, vendor_id):
         # Get the vendor by unique_id
         try:
@@ -259,14 +396,39 @@ class VendorItemMixin:
 
 # Vendor Trucks Views
 class VendorTruckListCreateView(VendorItemMixin, generics.ListCreateAPIView):
+    """
+    View for listing and creating trucks for a vendor.
+    
+    Only shows trucks belonging to the vendor associated with the authenticated user.
+    """
     permission_classes = [IsAuthenticated]
-    """View for listing and creating trucks for a vendor"""
     model = Truck
     
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return TruckCreateSerializer
         return TruckGetSerializer
+    
+    @swagger_auto_schema(
+        responses={
+            200: openapi.Response("List of trucks"),
+            201: openapi.Response("Truck created successfully")
+        },
+        operation_description="List and create trucks for the authenticated vendor"
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        request_body=TruckCreateSerializer,
+        responses={
+            201: TruckGetSerializer,
+            400: "Invalid data"
+        },
+        operation_description="Create a new truck for the authenticated vendor"
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
     
     def perform_create(self, serializer):
         vendor = self.get_vendor()
@@ -276,8 +438,12 @@ class VendorTruckListCreateView(VendorItemMixin, generics.ListCreateAPIView):
 
 
 class VendorTruckDetailView(VendorItemMixin, generics.RetrieveUpdateDestroyAPIView):
+    """
+    View for retrieving, updating and deleting a vendor's truck.
+    
+    Only works with trucks belonging to the vendor associated with the authenticated user.
+    """
     permission_classes = [IsAuthenticated]
-    """View for retrieving, updating and deleting a vendor's truck"""
     model = Truck
     lookup_field = 'unique_id'
     lookup_url_kwarg = 'truck_id'
@@ -286,6 +452,38 @@ class VendorTruckDetailView(VendorItemMixin, generics.RetrieveUpdateDestroyAPIVi
         if self.request.method in ['PUT', 'PATCH']:
             return TruckCreateSerializer
         return TruckGetSerializer
+    
+    @swagger_auto_schema(
+        responses={
+            200: TruckGetSerializer,
+            404: "Truck not found"
+        },
+        operation_description="Get details of a specific truck for the authenticated vendor"
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        request_body=TruckCreateSerializer,
+        responses={
+            200: TruckGetSerializer,
+            400: "Invalid data",
+            404: "Truck not found"
+        },
+        operation_description="Update a specific truck for the authenticated vendor"
+    )
+    def put(self, request, *args, **kwargs):
+        return super().put(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        responses={
+            204: "Truck deleted successfully",
+            404: "Truck not found"
+        },
+        operation_description="Delete a specific truck for the authenticated vendor"
+    )
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
 
 
 # Vendor Contacts Views

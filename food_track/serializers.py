@@ -6,7 +6,7 @@ import os
 class VendorCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vendor
-        fields = ['name', 'reg_no', 'vendor_type', 'fleet_size', 'description', 'status']
+        fields = ['name', 'vendor_type', 'fleet_size', 'status']
 
 class VendorGetSerializer(serializers.ModelSerializer):
     class Meta:

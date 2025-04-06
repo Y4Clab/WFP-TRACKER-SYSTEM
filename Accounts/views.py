@@ -16,15 +16,53 @@ from food_track.models import Vendor, Contact
 from Accounts.serializers import *
 from datetime import datetime, timedelta
 from Accounts.utils import UserUtils
+from rest_framework_simplejwt.views import TokenObtainPairView
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
+# Import schemas from docs module
+from Accounts.docs.schemas import (
+    login_request, login_response,
+    create_user_request, create_user_response,
+    account_activation_request, account_activation_response, account_activation_error,
+    forgot_password_request, forgot_password_response, email_not_found_response, wait_before_reset_response,
+    get_all_users_parameters
+)
+
+# Import documentation decorators
+from Accounts.docs.decorators import (
+    login_docs, create_user_docs, account_activation_docs, 
+    forgot_password_docs, get_all_users_docs, get_user_docs,
+    reset_password_docs, change_password_docs
+)
 
 # Create your views here.
 config = dotenv_values(".env")
 
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Takes a set of user credentials and returns an access and refresh JSON web
+    token pair to prove the authentication of those credentials.
+    
+    Also returns user role information in the response.
+    """
+    @login_docs
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+    
+    serializer_class = CustomTokenSerializer
+
+
 class CreateUserView(APIView):
+    """
+    Creates a new user account in the system.
+    """
     http_method_names = ["post"]
 
     @staticmethod
     @transaction.atomic
+    @create_user_docs
     def post(request):
         print(request.data)
         serializer = UserProfileSerializer(data = request.data)
@@ -83,7 +121,20 @@ class CreateUserView(APIView):
 
 
 class UpdateUserView(APIView):
+    """
+    Updates an existing user's profile information.
+    """
     http_method_names = ["post"]
+    
+    @swagger_auto_schema(
+        request_body=UserProfileSerializer,
+        responses={
+            202: "User updated successfully",
+            400: "Bad request - Failed to update user",
+            404: "User not found"
+        },
+        operation_description="Update an existing user's profile information"
+    )
     @staticmethod
     @transaction.atomic
     def post(request):
@@ -120,8 +171,13 @@ class UpdateUserView(APIView):
 
 
 class ActivateAccountView(APIView):
+    """
+    Activates a user account using the provided token.
+    """
     http_method_names = ["post"]
+    
     @staticmethod
+    @account_activation_docs
     def post(request):
         serializer = AccountActivationSerializer(data = request.data)
         serializer.is_valid(raise_exception=True)
@@ -146,9 +202,13 @@ class ActivateAccountView(APIView):
         
     
 class ForgotPasswordView(APIView):
+    """
+    Initiates the password reset process for a user.
+    """
     http_method_names = ['post']
 
     @staticmethod
+    @forgot_password_docs
     def post(request):
         serializer = ForgotPasswordSerializer(data = request.data).validated_data
         try:
@@ -195,9 +255,13 @@ class ForgotPasswordView(APIView):
 
 
 class ResetPasswordView(APIView):
+    """
+    Resets a user's password using the token received via email.
+    """
     http_method_names = ['post']
 
     @staticmethod
+    @reset_password_docs
     def post(request):
         serializer = SetPasswordSerializer(data = request.data).validated_data
         try:
@@ -213,7 +277,7 @@ class ResetPasswordView(APIView):
             if request_token_expired or requested_token is None:
                 return Response({"success": False, "message":"token is expired"})
             
-            user =requested_token.request_user
+            user = requested_token.request_user
             user.set_password(serializer["password"])
             user.save()
             requested_token.request_is_used = True
@@ -231,10 +295,14 @@ class DeleteUsersView(APIView):
 
 
 class ChangePasswordView(APIView):
+    """
+    Changes a user's password. Requires authentication.
+    """
     http_method_names = ["post"]
     permission_classes = [IsAuthenticated]
 
     @staticmethod
+    @change_password_docs
     def post(request):
         serializer = ChangePasswordSerializer(data = request.data).validated_data
         try:
@@ -251,13 +319,21 @@ class ChangePasswordView(APIView):
         
     
 class CreateUserRolesView(viewsets.ModelViewSet):
+    """
+    API endpoint that allows user roles to be created, viewed, edited, and deleted.
+    """
     queryset = UserRoles.objects.all()
     serializer_class = UserRolesSerializer
 
 
 class GetAllUsersView(APIView):
+    """
+    Lists all users with pagination.
+    """
     # permission_classes = [IsAdminUser]
+    
     @staticmethod
+    @get_all_users_docs
     def get(request):
         users = User.objects.all()
         page_number = request.query_params.get("page", 1)
@@ -293,8 +369,13 @@ class GetAllUsersView(APIView):
     
 
 class GetUser(APIView):
+    """
+    Gets the profile of the authenticated user.
+    """
     permission_classes = [IsAuthenticated]
-    def get(self ,request):
+    
+    @get_user_docs
+    def get(self, request):
         user = User.objects.filter(pk = request.user.id).first()
         if user is None:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -302,6 +383,7 @@ class GetUser(APIView):
         serializer = GetUserProfileSerializer(data = user_data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 
 
@@ -315,7 +397,7 @@ def get_user_data(user_id):
     user_roles = UsersWithRoles.objects.filter(user_with_role_user = user_id).first()
 
     user_data = {
-        "profile_unique_id" : user_profile.profile_unique_id,
+        "profile_unique_id" : user_profile.profile_unique_id or None,
         "profile_organization" : user_profile.profile_organization,
         "profile_firstname" : user.first_name,
         "profile_lastname" : user.last_name,

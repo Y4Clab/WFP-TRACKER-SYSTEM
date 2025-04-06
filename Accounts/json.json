@@ -6,3 +6,31 @@
   "profile_phone": "+1234567890",
   "profile_role": "vendor"
 }
+{
+  "profile_organization": "Acme Corp",
+  "profile_firstname": "John",
+  "profile_lastname": "Doe",
+  "profile_email": "nuh.saidi.buhero@gmail.com",
+  "profile_phone": "+1234567890",
+"password": "knjsdaiuhoisa",
+  "profile_role": "vendor"
+}
+
+login -> http://192.168.0.16:8000/accounts/token/
+
+
+assign truck a mission and cargo -> example
+{
+  "mission": 0,
+  "truck": 0,
+  "cargo_items": [
+    {
+      "cargo_item_id": "623e4567-e89b-12d3-a456-426614174555",
+      "quantity": 50
+    },
+    {
+      "cargo_item_id": "723e4567-e89b-12d3-a456-426614174666",
+      "quantity": 25
+    }
+  ]
+}
