@@ -8,14 +8,6 @@ from rest_framework.decorators import action
 from django.contrib.auth.models import User
 from .models import *
 from food_track.serializers import *
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
-
-# Import documentation decorators
-from food_track.docs.decorators import (
-    vendor_create_docs, truck_create_docs, truck_mission_assignment_docs,
-    cargo_assignment_docs, vendor_data_docs
-)
 
 # Create your views here.
 
@@ -24,27 +16,15 @@ from food_track.docs.decorators import (
 class BaseViewSet(viewsets.ModelViewSet):
     """
     Base ViewSet for handling separate serializers for create/update and retrieve operations.
-    Uses unique_id as the lookup field instead of the default pk.
+    Uses pk as the lookup field.
     """
     
-    @swagger_auto_schema(
-        operation_description="List all objects",
-        responses={200: "Success"}
-    )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
     
-    @swagger_auto_schema(
-        operation_description="Retrieve a specific object by its unique_id",
-        responses={200: "Success", 404: "Object not found"}
-    )
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
     
-    @swagger_auto_schema(
-        operation_description="Create a new object",
-        responses={201: "Object created successfully", 400: "Invalid data"}
-    )
     def create(self, request, *args, **kwargs):
         create_serializer = self.create_serializer_class(data=request.data)
         create_serializer.is_valid(raise_exception=True)
@@ -52,24 +32,12 @@ class BaseViewSet(viewsets.ModelViewSet):
         response_serializer = self.get_serializer_class_attr(instance)  # Use get serializer for response
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
-    @swagger_auto_schema(
-        operation_description="Update an object completely",
-        responses={200: "Object updated successfully", 400: "Invalid data", 404: "Object not found"}
-    )
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
     
-    @swagger_auto_schema(
-        operation_description="Partially update an object",
-        responses={200: "Object updated successfully", 400: "Invalid data", 404: "Object not found"}
-    )
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
     
-    @swagger_auto_schema(
-        operation_description="Delete an object",
-        responses={204: "Object deleted successfully", 404: "Object not found"}
-    )
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
     
@@ -80,10 +48,10 @@ class BaseViewSet(viewsets.ModelViewSet):
     
     def get_object(self):
         """
-        Override `get_object()` to retrieve instances using `unique_id` instead of `id`
+        Override `get_object()` to retrieve instances using `pk`
         """
         queryset = self.get_queryset()
-        filter_kwargs = {"unique_id": self.kwargs["pk"]}  # Look up by unique_id
+        filter_kwargs = {"pk": self.kwargs["pk"]}  # Look up by pk
         return get_object_or_404(queryset, **filter_kwargs)
 
     # Helper method to get vendor for the authenticated user
@@ -106,7 +74,6 @@ class VendorViewSet(BaseViewSet):
     create_serializer_class = VendorCreateSerializer
     get_serializer_class_attr = VendorGetSerializer
     
-    @vendor_create_docs
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
@@ -201,7 +168,6 @@ class TruckViewSet(BaseViewSet):
     create_serializer_class = TruckCreateSerializer
     get_serializer_class_attr = TruckGetSerializer
     
-    @truck_create_docs
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
@@ -218,7 +184,6 @@ class TrucksForMissionViewSet(BaseViewSet):
     create_serializer_class = TrucksForMissionCreateSerializer
     get_serializer_class_attr = TrucksForMissionGetSerializer
     
-    @truck_mission_assignment_docs
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
@@ -233,7 +198,7 @@ class MissionViewSet(BaseViewSet):
     queryset = Mission.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = MissionCreateSerializer
-    get_serializer_class_attr = MissionGetSerializer
+    get_serializer_class_attr = ComprehensiveMissionSerializer
 
 
 
@@ -284,7 +249,6 @@ class VendorUserDataView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
-    @vendor_data_docs
     def get(self, request):
         # Get the logged in user
         user = request.user
@@ -312,7 +276,7 @@ class VendorUserDataView(APIView):
         # Get missions through VendorMission
         vendor_missions = VendorMission.objects.filter(vendor=vendor)
         missions = [vm.mission for vm in vendor_missions]
-        missions_data = MissionGetSerializer(missions, many=True).data
+        missions_data = ComprehensiveMissionSerializer(missions, many=True).data
         
         response_data = {
             "vendor": VendorGetSerializer(vendor).data,
@@ -333,17 +297,10 @@ class VendorDataByIdView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
-    @swagger_auto_schema(
-        responses={
-            200: openapi.Response("Vendor data retrieved successfully"),
-            404: "Vendor not found"
-        },
-        operation_description="Get all data related to a specific vendor by ID (admin function)"
-    )
     def get(self, request, vendor_id):
-        # Get the vendor by unique_id
+        # Get the vendor by id
         try:
-            vendor = Vendor.objects.get(unique_id=vendor_id)
+            vendor = Vendor.objects.get(pk=vendor_id)
         except Vendor.DoesNotExist:
             return Response(
                 {"error": f"No vendor found with ID {vendor_id}"}, 
@@ -361,7 +318,7 @@ class VendorDataByIdView(APIView):
         # Get missions through VendorMission
         vendor_missions = VendorMission.objects.filter(vendor=vendor)
         missions = [vm.mission for vm in vendor_missions]
-        missions_data = MissionGetSerializer(missions, many=True).data
+        missions_data = ComprehensiveMissionSerializer(missions, many=True).data
         
         response_data = {
             "vendor": VendorGetSerializer(vendor).data,
@@ -409,24 +366,9 @@ class VendorTruckListCreateView(VendorItemMixin, generics.ListCreateAPIView):
             return TruckCreateSerializer
         return TruckGetSerializer
     
-    @swagger_auto_schema(
-        responses={
-            200: openapi.Response("List of trucks"),
-            201: openapi.Response("Truck created successfully")
-        },
-        operation_description="List and create trucks for the authenticated vendor"
-    )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
     
-    @swagger_auto_schema(
-        request_body=TruckCreateSerializer,
-        responses={
-            201: TruckGetSerializer,
-            400: "Invalid data"
-        },
-        operation_description="Create a new truck for the authenticated vendor"
-    )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
     
@@ -445,7 +387,7 @@ class VendorTruckDetailView(VendorItemMixin, generics.RetrieveUpdateDestroyAPIVi
     """
     permission_classes = [IsAuthenticated]
     model = Truck
-    lookup_field = 'unique_id'
+    lookup_field = 'pk'
     lookup_url_kwarg = 'truck_id'
     
     def get_serializer_class(self):
@@ -453,35 +395,12 @@ class VendorTruckDetailView(VendorItemMixin, generics.RetrieveUpdateDestroyAPIVi
             return TruckCreateSerializer
         return TruckGetSerializer
     
-    @swagger_auto_schema(
-        responses={
-            200: TruckGetSerializer,
-            404: "Truck not found"
-        },
-        operation_description="Get details of a specific truck for the authenticated vendor"
-    )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
     
-    @swagger_auto_schema(
-        request_body=TruckCreateSerializer,
-        responses={
-            200: TruckGetSerializer,
-            400: "Invalid data",
-            404: "Truck not found"
-        },
-        operation_description="Update a specific truck for the authenticated vendor"
-    )
     def put(self, request, *args, **kwargs):
         return super().put(request, *args, **kwargs)
     
-    @swagger_auto_schema(
-        responses={
-            204: "Truck deleted successfully",
-            404: "Truck not found"
-        },
-        operation_description="Delete a specific truck for the authenticated vendor"
-    )
     def delete(self, request, *args, **kwargs):
         return super().delete(request, *args, **kwargs)
 
@@ -508,7 +427,7 @@ class VendorContactDetailView(VendorItemMixin, generics.RetrieveUpdateDestroyAPI
     permission_classes = [IsAuthenticated]
     """View for retrieving, updating and deleting a vendor's contact"""
     model = Contact
-    lookup_field = 'contact_id'
+    lookup_field = 'pk'
     lookup_url_kwarg = 'contact_id'
     
     def get_serializer_class(self):
@@ -522,7 +441,7 @@ class VendorMissionListView(VendorItemMixin, generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     """View for listing missions for a vendor"""
     model = VendorMission
-    serializer_class = MissionGetSerializer
+    serializer_class = ComprehensiveMissionSerializer
     
     def get_queryset(self):
         vendor = self.get_vendor()
@@ -538,8 +457,8 @@ class VendorMissionListView(VendorItemMixin, generics.ListAPIView):
 class VendorMissionDetailView(generics.RetrieveAPIView):
     """View for retrieving a specific mission for a vendor"""
     permission_classes = [IsAuthenticated]
-    serializer_class = MissionGetSerializer
-    lookup_field = 'mission_id'
+    serializer_class = ComprehensiveMissionSerializer
+    lookup_field = 'pk'
     lookup_url_kwarg = 'mission_id'
     
     def get_queryset(self):
@@ -613,7 +532,7 @@ class VendorTrucksForMissionDetailView(VendorItemMixin, generics.RetrieveUpdateD
     permission_classes = [IsAuthenticated]
     """View for retrieving, updating and deleting a vendor's truck-mission assignment"""
     model = TrucksForMission
-    lookup_field = 'unique_id'
+    lookup_field = 'pk'
     lookup_url_kwarg = 'assignment_id'
     
     def get_serializer_class(self):
@@ -626,7 +545,7 @@ class VendorTrucksForMissionCargoView(generics.UpdateAPIView):
     """View for assigning cargo items to a truck for a mission"""
     permission_classes = [IsAuthenticated]
     serializer_class = TrucksForMissionGetSerializer
-    lookup_field = 'unique_id'
+    lookup_field = 'pk'
     lookup_url_kwarg = 'assignment_id'
     
     def get_queryset(self):

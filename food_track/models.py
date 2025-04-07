@@ -103,8 +103,12 @@ class Truck(models.Model):
         ('maintenance', 'Maintenance'),
     ]
 
+    plate_number = models.CharField(max_length=255, unique=True, blank=True, null=True)
     unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     vehicle_name = models.CharField(max_length=255)
+    year = models.IntegerField()
+    model = models.CharField(max_length=255)
+    capacity = models.PositiveIntegerField()
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default="active")
 
@@ -170,7 +174,7 @@ class Mission(models.Model):
         ('Active', 'Active'),
     ]
 
-    mission_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     type = models.CharField(max_length=20, choices=MISSION_TYPES)
     number_of_beneficiaries = models.PositiveIntegerField()
