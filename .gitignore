@@ -4,3 +4,6 @@ food_track/__pycache__/
 food_track/migrations/__pycache__/
 logitrack/__pycache__/
 backend/
+
+Accounts/__pycache__/
+Accounts/migrations/__pycache__/

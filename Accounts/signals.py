@@ -21,10 +21,10 @@ def create_vendor_contact(sender, instance, created, **kwargs):
             user_profile = UserProfile.objects.filter(profile_user=user).first()
                 
             # Try to find vendor by matching reg_no with profile_organization
-            vendor = Vendor.objects.filter(reg_no=user_profile.profile_organization).first()
+            vendor = Vendor.objects.filter(name=user_profile.profile_organization).first()
             
             if not vendor:
-                logger.error(f"No vendor found with reg_no matching")
+                logger.error(f"No vendor found with name matching")
                 # Instead of raising exception, we'll log the error and return
                 return
             

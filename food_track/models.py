@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 import os
-
+import datetime
 # Create your models here.
 class Vendor(models.Model):
     VENDOR_TYPES = [
@@ -26,6 +26,17 @@ class Vendor(models.Model):
     fleet_size = models.IntegerField()
     description = models.TextField()
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+
+    def save(self, *args, **kwargs):
+        # Auto-generate reg_no if not provided
+        if not self.reg_no:
+            # Get current date and time
+            now = datetime.datetime.now()
+            # Format: VEN-YYYYMMDD-RandomUUID first 8 chars
+            uuid_part = str(uuid.uuid4()).split('-')[0]
+            date_part = now.strftime('%Y%m%d')
+            self.reg_no = f"VEN-{date_part}-{uuid_part}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -92,8 +103,12 @@ class Truck(models.Model):
         ('maintenance', 'Maintenance'),
     ]
 
+    plate_number = models.CharField(max_length=255, unique=True, blank=True, null=True)
     unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     vehicle_name = models.CharField(max_length=255)
+    year = models.IntegerField()
+    model = models.CharField(max_length=255)
+    capacity = models.PositiveIntegerField()
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default="active")
 
@@ -159,7 +174,7 @@ class Mission(models.Model):
         ('Active', 'Active'),
     ]
 
-    mission_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     type = models.CharField(max_length=20, choices=MISSION_TYPES)
     number_of_beneficiaries = models.PositiveIntegerField()

@@ -1,11 +1,9 @@
-from rest_framework import viewsets, permissions, status, generics
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
+from rest_framework import viewsets, status, generics
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
-from rest_framework.decorators import action
-from django.contrib.auth.models import User
 from .models import *
 from food_track.serializers import *
 
@@ -14,18 +12,11 @@ from food_track.serializers import *
 
 # Base ViewSet to handle separate serializers for create and retrieve
 class BaseViewSet(viewsets.ModelViewSet):
-    def get_serializer_class(self):
-        if self.action in ['create', 'update', 'partial_update']:
-            return self.create_serializer_class
-        return self.get_serializer_class_attr
-    
-    def get_object(self):
-        """
-        Override `get_object()` to retrieve instances using `unique_id` instead of `id`
-        """
-        queryset = self.get_queryset()
-        filter_kwargs = {"unique_id": self.kwargs["pk"]}  # Look up by unique_id
-        return get_object_or_404(queryset, **filter_kwargs)
+    """
+    Base ViewSet for handling separate serializers for create/update and retrieve operations.
+    Uses pk as the lookup field.
+    """
+
     
     def create(self, request, *args, **kwargs):
         create_serializer = self.create_serializer_class(data=request.data)
@@ -33,6 +24,20 @@ class BaseViewSet(viewsets.ModelViewSet):
         instance = create_serializer.save()  # Save using create serializer
         response_serializer = self.get_serializer_class_attr(instance)  # Use get serializer for response
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+    
+    
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return self.create_serializer_class
+        return self.get_serializer_class_attr
+    
+    def get_object(self):
+        """
+        Override `get_object()` to retrieve instances using `pk`
+        """
+        queryset = self.get_queryset()
+        filter_kwargs = {"pk": self.kwargs["pk"]}  # Look up by pk
+        return get_object_or_404(queryset, **filter_kwargs)
 
     # Helper method to get vendor for the authenticated user
     def get_vendor_for_user(self):
@@ -44,30 +49,50 @@ class BaseViewSet(viewsets.ModelViewSet):
 
 
 class VendorViewSet(BaseViewSet):
+    """
+    API endpoints for managing Vendor resources.
+    
+    Vendors are organizations providing transportation services.
+    """
     queryset = Vendor.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = VendorCreateSerializer
     get_serializer_class_attr = VendorGetSerializer
-
+    
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
 
 class ProductViewSet(BaseViewSet):
+    """
+    API endpoints for managing Product resources.
+    
+    Products are items that can be transported as cargo.
+    """
     queryset = Product.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = ProductCreateSerializer
     get_serializer_class_attr = ProductGetSerializer
 
 
-
 class DriverViewSet(BaseViewSet):
+    """
+    API endpoints for managing Driver resources.
+    
+    Drivers are individuals operating trucks for transportation.
+    """
     queryset = Driver.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = DriverCreateSerializer
     get_serializer_class_attr = DriverGetSerializer
 
 
-
 class CargoViewSet(BaseViewSet):
+    """
+    API endpoints for managing Cargo resources.
+    
+    Cargo represents collections of items to be transported.
+    """
     queryset = Cargo.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = CargoCreateSerializer
@@ -76,6 +101,11 @@ class CargoViewSet(BaseViewSet):
 
 
 class CargoItemsViewSet(BaseViewSet):
+    """
+    API endpoints for managing CargoItems resources.
+    
+    CargoItems are individual items within a cargo shipment.
+    """
     queryset = CargoItems.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = CargoItemsCreateSerializer
@@ -84,6 +114,11 @@ class CargoItemsViewSet(BaseViewSet):
 
 
 class RegionViewSet(BaseViewSet):
+    """
+    API endpoints for managing Region resources.
+    
+    Regions represent geographical areas for operations.
+    """
     queryset = Region.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = RegionCreateSerializer
@@ -92,6 +127,11 @@ class RegionViewSet(BaseViewSet):
 
 
 class ContactViewSet(BaseViewSet):
+    """
+    API endpoints for managing Contact resources.
+    
+    Contacts are individuals associated with vendors.
+    """
     queryset = Contact.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = ContactCreateSerializer
@@ -100,30 +140,56 @@ class ContactViewSet(BaseViewSet):
 
 
 class TruckViewSet(BaseViewSet):
+    """
+    API endpoints for managing Truck resources.
+    
+    Trucks are vehicles used for transportation.
+    """
     queryset = Truck.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = TruckCreateSerializer
     get_serializer_class_attr = TruckGetSerializer
+    
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
 
 
 class TrucksForMissionViewSet(BaseViewSet):
+    """
+    API endpoints for managing TrucksForMission resources.
+    
+    TrucksForMission represent assignments of trucks to specific missions.
+    """
     queryset = TrucksForMission.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = TrucksForMissionCreateSerializer
     get_serializer_class_attr = TrucksForMissionGetSerializer
+    
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
 
 
 class MissionViewSet(BaseViewSet):
+    """
+    API endpoints for managing Mission resources.
+    
+    Missions are transportation tasks from origin to destination.
+    """
     queryset = Mission.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = MissionCreateSerializer
-    get_serializer_class_attr = MissionGetSerializer
+    get_serializer_class_attr = ComprehensiveMissionSerializer
 
 
 
 class VendorMissionViewSet(BaseViewSet):
+    """
+    API endpoints for managing VendorMission resources.
+    
+    VendorMissions associate vendors with specific missions.
+    """
     queryset = VendorMission.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = VendorMissionCreateSerializer
@@ -132,14 +198,23 @@ class VendorMissionViewSet(BaseViewSet):
 
 
 class OperationRegionViewSet(BaseViewSet):
+    """
+    API endpoints for managing OperationRegion resources.
+    
+    OperationRegions define geographical areas where vendors operate.
+    """
     queryset = OperationRegion.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = OperationRegionCreateSerializer
     get_serializer_class_attr = OperationRegionGetSerializer
 
 
-
 class DocumentsAndAgreementsViewSet(BaseViewSet):
+    """
+    API endpoints for managing DocumentsAndAgreements resources.
+    
+    Documents and agreements associated with vendors.
+    """
     queryset = DocumentsAndAgreements.objects.all()
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = DocumentsAndAgreementsCreateSerializer
@@ -182,7 +257,7 @@ class VendorUserDataView(APIView):
         # Get missions through VendorMission
         vendor_missions = VendorMission.objects.filter(vendor=vendor)
         missions = [vm.mission for vm in vendor_missions]
-        missions_data = MissionGetSerializer(missions, many=True).data
+        missions_data = ComprehensiveMissionSerializer(missions, many=True).data
         
         response_data = {
             "vendor": VendorGetSerializer(vendor).data,
@@ -204,9 +279,9 @@ class VendorDataByIdView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request, vendor_id):
-        # Get the vendor by unique_id
+        # Get the vendor by id
         try:
-            vendor = Vendor.objects.get(unique_id=vendor_id)
+            vendor = Vendor.objects.get(pk=vendor_id)
         except Vendor.DoesNotExist:
             return Response(
                 {"error": f"No vendor found with ID {vendor_id}"}, 
@@ -224,7 +299,7 @@ class VendorDataByIdView(APIView):
         # Get missions through VendorMission
         vendor_missions = VendorMission.objects.filter(vendor=vendor)
         missions = [vm.mission for vm in vendor_missions]
-        missions_data = MissionGetSerializer(missions, many=True).data
+        missions_data = ComprehensiveMissionSerializer(missions, many=True).data
         
         response_data = {
             "vendor": VendorGetSerializer(vendor).data,
@@ -259,8 +334,12 @@ class VendorItemMixin:
 
 # Vendor Trucks Views
 class VendorTruckListCreateView(VendorItemMixin, generics.ListCreateAPIView):
+    """
+    View for listing and creating trucks for a vendor.
+    
+    Only shows trucks belonging to the vendor associated with the authenticated user.
+    """
     permission_classes = [IsAuthenticated]
-    """View for listing and creating trucks for a vendor"""
     model = Truck
     
     def get_serializer_class(self):
@@ -276,17 +355,21 @@ class VendorTruckListCreateView(VendorItemMixin, generics.ListCreateAPIView):
 
 
 class VendorTruckDetailView(VendorItemMixin, generics.RetrieveUpdateDestroyAPIView):
+    """
+    View for retrieving, updating and deleting a vendor's truck.
+    
+    Only works with trucks belonging to the vendor associated with the authenticated user.
+    """
     permission_classes = [IsAuthenticated]
-    """View for retrieving, updating and deleting a vendor's truck"""
     model = Truck
-    lookup_field = 'unique_id'
+    lookup_field = 'pk'
     lookup_url_kwarg = 'truck_id'
     
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
             return TruckCreateSerializer
         return TruckGetSerializer
-
+    
 
 # Vendor Contacts Views
 class VendorContactListCreateView(VendorItemMixin, generics.ListCreateAPIView):
@@ -310,7 +393,7 @@ class VendorContactDetailView(VendorItemMixin, generics.RetrieveUpdateDestroyAPI
     permission_classes = [IsAuthenticated]
     """View for retrieving, updating and deleting a vendor's contact"""
     model = Contact
-    lookup_field = 'contact_id'
+    lookup_field = 'pk'
     lookup_url_kwarg = 'contact_id'
     
     def get_serializer_class(self):
@@ -324,7 +407,7 @@ class VendorMissionListView(VendorItemMixin, generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     """View for listing missions for a vendor"""
     model = VendorMission
-    serializer_class = MissionGetSerializer
+    serializer_class = ComprehensiveMissionSerializer
     
     def get_queryset(self):
         vendor = self.get_vendor()
@@ -340,8 +423,8 @@ class VendorMissionListView(VendorItemMixin, generics.ListAPIView):
 class VendorMissionDetailView(generics.RetrieveAPIView):
     """View for retrieving a specific mission for a vendor"""
     permission_classes = [IsAuthenticated]
-    serializer_class = MissionGetSerializer
-    lookup_field = 'mission_id'
+    serializer_class = ComprehensiveMissionSerializer
+    lookup_field = 'pk'
     lookup_url_kwarg = 'mission_id'
     
     def get_queryset(self):
@@ -415,7 +498,7 @@ class VendorTrucksForMissionDetailView(VendorItemMixin, generics.RetrieveUpdateD
     permission_classes = [IsAuthenticated]
     """View for retrieving, updating and deleting a vendor's truck-mission assignment"""
     model = TrucksForMission
-    lookup_field = 'unique_id'
+    lookup_field = 'pk'
     lookup_url_kwarg = 'assignment_id'
     
     def get_serializer_class(self):
@@ -428,7 +511,7 @@ class VendorTrucksForMissionCargoView(generics.UpdateAPIView):
     """View for assigning cargo items to a truck for a mission"""
     permission_classes = [IsAuthenticated]
     serializer_class = TrucksForMissionGetSerializer
-    lookup_field = 'unique_id'
+    lookup_field = 'pk'
     lookup_url_kwarg = 'assignment_id'
     
     def get_queryset(self):

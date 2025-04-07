@@ -1,6 +1,23 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from Accounts.models import *
 from django.contrib.auth.password_validation import validate_password
+
+
+class CustomTokenSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        # Get the user from the token
+        user = self.user
+        
+        # Get the user's role
+        user_with_role = UsersWithRoles.objects.filter(user_with_role_user=user).first()
+        if user_with_role:
+            role = user_with_role.user_with_role_role
+            data.update({'role': role.role_name})
+        
+        return data
 
 
 class UserProfileSerializer(serializers.Serializer):
@@ -45,12 +62,12 @@ class AllUsersResponseSerializer(serializers.Serializer):
 
 class AccountActivationSerializer(serializers.Serializer):
     request_token = serializers.CharField(required=True)
-    password = serializers.CharField(
-        write_only=True, 
-        required=True,
-        validators=[validate_password],  # Uses Django's built-in password validators
-        style={"input_type": "password"}  # Ensures password field is hidden in forms
-    )
+    # password = serializers.CharField(
+    #     write_only=True, 
+    #     required=True,
+    #     validators=[validate_password],  # Uses Django's built-in password validators
+    #     style={"input_type": "password"}  # Ensures password field is hidden in forms
+    # )
 
 
 class ForgotPasswordSerializer(serializers.Serializer):

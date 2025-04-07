@@ -1,12 +1,17 @@
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
+
+from Accounts.models import UserProfile
 from .models import *
 import os
+
+User = get_user_model()
 
 # Base serializers without complex relationships
 class VendorCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vendor
-        fields = ['name', 'reg_no', 'vendor_type', 'fleet_size', 'description', 'status']
+        fields = ['name', 'vendor_type', 'fleet_size', 'status']
 
 class VendorGetSerializer(serializers.ModelSerializer):
     class Meta:
@@ -100,7 +105,7 @@ class TruckCreateSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(read_only=True)
     class Meta:
         model = Truck
-        fields = ['id', 'unique_id', 'vehicle_name', 'vendor', 'status']
+        fields = ['id', 'unique_id', 'plate_number', 'year', 'model', 'vehicle_name', 'capacity', 'vendor', 'status']
 
 class TruckGetSerializer(serializers.ModelSerializer):
     vendor = VendorGetSerializer()
@@ -196,9 +201,23 @@ class TrucksForMissionCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         """
         Validate that cargo items belong to the mission and quantities are available
+        Also check that total items don't exceed truck capacity
         """
         mission = data.get('mission')
+        truck = data.get('truck')
         cargo_items = data.get('cargo_items', [])
+        
+        # Calculate total items to be transported
+        total_items = 0
+        for item in cargo_items:
+            if item.get('quantity'):
+                total_items += int(item['quantity'])
+        
+        # Check if truck has sufficient capacity
+        if truck and total_items > truck.capacity:
+            raise serializers.ValidationError({
+                "cargo_items": f"Total cargo quantity ({total_items}) exceeds truck capacity ({truck.capacity})"
+            })
         
         if mission and cargo_items:
             # Verify mission has associated cargo
@@ -273,10 +292,11 @@ class TruckCargoAssignmentSerializer(serializers.ModelSerializer):
     mission = MissionGetSerializer()
     truck = TruckGetSerializer()
     cargo_items = serializers.SerializerMethodField()
+    capacity_utilization = serializers.SerializerMethodField()
     
     class Meta:
         model = TrucksForMission
-        fields = ['unique_id', 'mission', 'truck', 'cargo_items']
+        fields = ['unique_id', 'mission', 'truck', 'cargo_items', 'capacity_utilization']
     
     def get_cargo_items(self, obj):
         truck_cargo_items = obj.truck_cargo_items.all()
@@ -293,6 +313,23 @@ class TruckCargoAssignmentSerializer(serializers.ModelSerializer):
             })
             
         return items_data
+    
+    def get_capacity_utilization(self, obj):
+        """Calculate how much of the truck's capacity is being utilized"""
+        truck = obj.truck
+        total_items = obj.truck_cargo_items.aggregate(
+            total=models.Sum('transferring_quantity')
+        )['total'] or 0
+        
+        capacity = truck.capacity
+        utilization_percentage = (total_items / capacity * 100) if capacity > 0 else 0
+        
+        return {
+            'total_capacity': capacity,
+            'items_assigned': total_items,
+            'remaining_capacity': max(0, capacity - total_items),
+            'utilization_percentage': round(utilization_percentage, 2)
+        }
 
 class DocumentsAndAgreementsCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -318,3 +355,119 @@ class DocumentsAndAgreementsGetSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentsAndAgreements
         fields = '__all__'
+
+class ComprehensiveMissionSerializer(serializers.ModelSerializer):
+    """
+    Comprehensive mission serializer that includes all related data:
+    - Cargo items
+    - Assigned trucks
+    - Assigned vendors
+    """
+    cargo_items = serializers.SerializerMethodField()
+    assigned_trucks = serializers.SerializerMethodField()
+    assigned_vendors = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Mission
+        fields = ['unique_id', 'id', 'title', 'type', 'number_of_beneficiaries', 
+                 'description', 'dept_location', 'destination_location', 
+                 'start_date', 'end_date', 'status','cargo_items', 'assigned_trucks', 
+                 'assigned_vendors']
+    
+    def get_cargo_items(self, mission):
+        # Get the cargo associated with this mission
+        cargo = Cargo.objects.filter(mission=mission).first()
+        if not cargo:
+            return []
+        
+        # Get all cargo items for this cargo
+        cargo_items = CargoItems.objects.filter(cargo=cargo)
+        return CargoItemsGetSerializer(cargo_items, many=True).data
+    
+    def get_assigned_trucks(self, mission):
+        # Get all truck assignments for this mission
+        truck_assignments = TrucksForMission.objects.filter(mission=mission)
+        
+        # Format the data to include both truck details and cargo assignments
+        result = []
+        for assignment in truck_assignments:
+            # Get truck details
+            truck_data = TruckGetSerializer(assignment.truck).data
+            
+            # Get cargo items assigned to this truck for this mission
+            truck_cargo_items = TruckCargoItem.objects.filter(truck_mission=assignment)
+            cargo_assignments = []
+            
+            # Calculate total quantity assigned to this truck
+            total_quantity = 0
+            
+            for truck_cargo in truck_cargo_items:
+                cargo_item_data = CargoItemsGetSerializer(truck_cargo.cargo_item).data
+                quantity = truck_cargo.transferring_quantity
+                total_quantity += quantity
+                
+                cargo_assignments.append({
+                    'cargo_item': cargo_item_data,
+                    'quantity': quantity
+                })
+            
+            # Calculate capacity utilization
+            capacity = assignment.truck.capacity
+            utilization_percentage = (total_quantity / capacity * 100) if capacity > 0 else 0
+            
+            # Create a complete truck assignment object
+            assignment_data = {
+                'assignment_id': assignment.unique_id,
+                'truck': truck_data,
+                'assigned_cargo': cargo_assignments,
+                'capacity_data': {
+                    'total_capacity': capacity,
+                    'items_assigned': total_quantity,
+                    'remaining_capacity': max(0, capacity - total_quantity),
+                    'utilization_percentage': round(utilization_percentage, 2)
+                }
+            }
+            
+            result.append(assignment_data)
+            
+        return result
+    
+    def get_assigned_vendors(self, mission):
+        # Get all vendor assignments for this mission
+        vendor_missions = VendorMission.objects.filter(mission=mission)
+        result = []
+        
+        for vm in vendor_missions:
+            vendor_data = VendorGetSerializer(vm.vendor).data
+            
+            # Get contacts for this vendor
+            contacts = Contact.objects.filter(vendor=vm.vendor)
+            contact_data = []
+            
+            for contact in contacts:
+                user_data = User.objects.filter(id=contact.user.id, is_active=True).first()
+                if user_data:
+                    user_profile = UserProfile.objects.filter(profile_user=user_data, profile_is_active=True).first()
+                    if user_profile:
+                        # Convert UserProfile to a serializable dictionary
+                        contact_info = {
+                            'id': user_profile.id,
+                            'unique_id': str(user_profile.profile_unique_id),
+                            'name': f"{user_data.first_name} {user_data.last_name}",
+                            'email': user_data.email,
+                            'phone': user_profile.profile_phone,
+                            'organization': user_profile.profile_organization
+                        }
+                        contact_data.append(contact_info)
+            
+            # Create a complete vendor assignment object
+            assignment_data = {
+                'assignment_id': vm.unique_id,
+                'vendor': vendor_data,
+                'contacts': contact_data,
+                # 'assignment_date': vm.created_at
+            }
+            
+            result.append(assignment_data)
+            
+        return result

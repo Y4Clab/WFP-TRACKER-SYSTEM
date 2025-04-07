@@ -1,32 +1,47 @@
-from django.shortcuts import render
 from django.utils import timezone
-import pytz
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
+from rest_framework_simplejwt.views import TokenObtainPairView
+import pytz
 from dotenv import dotenv_values
+from datetime import datetime, timedelta
 from Accounts.models import *
 from Accounts.EmailUtils import CustomEmailBackend
-from food_track.models import Vendor, Contact
 from Accounts.serializers import *
-from datetime import datetime, timedelta
 from Accounts.utils import UserUtils
 
 # Create your views here.
 config = dotenv_values(".env")
 
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Takes a set of user credentials and returns an access and refresh JSON web
+    token pair to prove the authentication of those credentials.
+    
+    Also returns user role information in the response.
+    """
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+    
+    serializer_class = CustomTokenSerializer
+
+
 class CreateUserView(APIView):
+    """
+    Creates a new user account in the system.
+    """
     http_method_names = ["post"]
 
     @staticmethod
     @transaction.atomic
     def post(request):
-        print(request.data)
         serializer = UserProfileSerializer(data = request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -83,7 +98,11 @@ class CreateUserView(APIView):
 
 
 class UpdateUserView(APIView):
+    """
+    Updates an existing user's profile information.
+    """
     http_method_names = ["post"]
+    
     @staticmethod
     @transaction.atomic
     def post(request):
@@ -120,7 +139,11 @@ class UpdateUserView(APIView):
 
 
 class ActivateAccountView(APIView):
+    """
+    Activates a user account using the provided token.
+    """
     http_method_names = ["post"]
+    
     @staticmethod
     def post(request):
         serializer = AccountActivationSerializer(data = request.data)
@@ -146,6 +169,9 @@ class ActivateAccountView(APIView):
         
     
 class ForgotPasswordView(APIView):
+    """
+    Initiates the password reset process for a user.
+    """
     http_method_names = ['post']
 
     @staticmethod
@@ -195,6 +221,9 @@ class ForgotPasswordView(APIView):
 
 
 class ResetPasswordView(APIView):
+    """
+    Resets a user's password using the token received via email.
+    """
     http_method_names = ['post']
 
     @staticmethod
@@ -213,7 +242,7 @@ class ResetPasswordView(APIView):
             if request_token_expired or requested_token is None:
                 return Response({"success": False, "message":"token is expired"})
             
-            user =requested_token.request_user
+            user = requested_token.request_user
             user.set_password(serializer["password"])
             user.save()
             requested_token.request_is_used = True
@@ -231,6 +260,9 @@ class DeleteUsersView(APIView):
 
 
 class ChangePasswordView(APIView):
+    """
+    Changes a user's password. Requires authentication.
+    """
     http_method_names = ["post"]
     permission_classes = [IsAuthenticated]
 
@@ -251,12 +283,19 @@ class ChangePasswordView(APIView):
         
     
 class CreateUserRolesView(viewsets.ModelViewSet):
+    """
+    API endpoint that allows user roles to be created, viewed, edited, and deleted.
+    """
     queryset = UserRoles.objects.all()
     serializer_class = UserRolesSerializer
 
 
 class GetAllUsersView(APIView):
+    """
+    Lists all users with pagination.
+    """
     # permission_classes = [IsAdminUser]
+    
     @staticmethod
     def get(request):
         users = User.objects.all()
@@ -293,8 +332,12 @@ class GetAllUsersView(APIView):
     
 
 class GetUser(APIView):
+    """
+    Gets the profile of the authenticated user.
+    """
     permission_classes = [IsAuthenticated]
-    def get(self ,request):
+    
+    def get(self, request):
         user = User.objects.filter(pk = request.user.id).first()
         if user is None:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -304,18 +347,14 @@ class GetUser(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-
 def get_user_data(user_id):
     print(user_id)
     user = User.objects.filter(pk = user_id).first()
-    print(user.username)
     user_profile = UserProfile.objects.filter(profile_user_id = user_id).first()
-    print(user_profile)
-    print("haapaa")
     user_roles = UsersWithRoles.objects.filter(user_with_role_user = user_id).first()
 
     user_data = {
-        "profile_unique_id" : user_profile.profile_unique_id,
+        "profile_unique_id" : user_profile.profile_unique_id or None,
         "profile_organization" : user_profile.profile_organization,
         "profile_firstname" : user.first_name,
         "profile_lastname" : user.last_name,
