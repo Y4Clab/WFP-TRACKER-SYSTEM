@@ -1,22 +1,20 @@
-from django.shortcuts import render
 from django.utils import timezone
-import pytz
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
+from rest_framework_simplejwt.views import TokenObtainPairView
+import pytz
 from dotenv import dotenv_values
+from datetime import datetime, timedelta
 from Accounts.models import *
 from Accounts.EmailUtils import CustomEmailBackend
-from food_track.models import Vendor, Contact
 from Accounts.serializers import *
-from datetime import datetime, timedelta
 from Accounts.utils import UserUtils
-from rest_framework_simplejwt.views import TokenObtainPairView
 
 # Create your views here.
 config = dotenv_values(".env")
@@ -44,7 +42,6 @@ class CreateUserView(APIView):
     @staticmethod
     @transaction.atomic
     def post(request):
-        print(request.data)
         serializer = UserProfileSerializer(data = request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -350,15 +347,10 @@ class GetUser(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-
-
 def get_user_data(user_id):
     print(user_id)
     user = User.objects.filter(pk = user_id).first()
-    print(user.username)
     user_profile = UserProfile.objects.filter(profile_user_id = user_id).first()
-    print(user_profile)
-    print("haapaa")
     user_roles = UsersWithRoles.objects.filter(user_with_role_user = user_id).first()
 
     user_data = {

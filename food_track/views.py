@@ -1,11 +1,9 @@
-from rest_framework import viewsets, permissions, status, generics
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
+from rest_framework import viewsets, status, generics
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
-from rest_framework.decorators import action
-from django.contrib.auth.models import User
 from .models import *
 from food_track.serializers import *
 
@@ -18,12 +16,7 @@ class BaseViewSet(viewsets.ModelViewSet):
     Base ViewSet for handling separate serializers for create/update and retrieve operations.
     Uses pk as the lookup field.
     """
-    
-    def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
-    
-    def retrieve(self, request, *args, **kwargs):
-        return super().retrieve(request, *args, **kwargs)
+
     
     def create(self, request, *args, **kwargs):
         create_serializer = self.create_serializer_class(data=request.data)
@@ -32,14 +25,6 @@ class BaseViewSet(viewsets.ModelViewSet):
         response_serializer = self.get_serializer_class_attr(instance)  # Use get serializer for response
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
-    def update(self, request, *args, **kwargs):
-        return super().update(request, *args, **kwargs)
-    
-    def partial_update(self, request, *args, **kwargs):
-        return super().partial_update(request, *args, **kwargs)
-    
-    def destroy(self, request, *args, **kwargs):
-        return super().destroy(request, *args, **kwargs)
     
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -78,7 +63,6 @@ class VendorViewSet(BaseViewSet):
         return super().create(request, *args, **kwargs)
 
 
-
 class ProductViewSet(BaseViewSet):
     """
     API endpoints for managing Product resources.
@@ -91,7 +75,6 @@ class ProductViewSet(BaseViewSet):
     get_serializer_class_attr = ProductGetSerializer
 
 
-
 class DriverViewSet(BaseViewSet):
     """
     API endpoints for managing Driver resources.
@@ -102,7 +85,6 @@ class DriverViewSet(BaseViewSet):
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = DriverCreateSerializer
     get_serializer_class_attr = DriverGetSerializer
-
 
 
 class CargoViewSet(BaseViewSet):
@@ -225,7 +207,6 @@ class OperationRegionViewSet(BaseViewSet):
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = OperationRegionCreateSerializer
     get_serializer_class_attr = OperationRegionGetSerializer
-
 
 
 class DocumentsAndAgreementsViewSet(BaseViewSet):
@@ -366,12 +347,6 @@ class VendorTruckListCreateView(VendorItemMixin, generics.ListCreateAPIView):
             return TruckCreateSerializer
         return TruckGetSerializer
     
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
-    
-    def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
-    
     def perform_create(self, serializer):
         vendor = self.get_vendor()
         if not vendor:
@@ -395,15 +370,6 @@ class VendorTruckDetailView(VendorItemMixin, generics.RetrieveUpdateDestroyAPIVi
             return TruckCreateSerializer
         return TruckGetSerializer
     
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
-    
-    def put(self, request, *args, **kwargs):
-        return super().put(request, *args, **kwargs)
-    
-    def delete(self, request, *args, **kwargs):
-        return super().delete(request, *args, **kwargs)
-
 
 # Vendor Contacts Views
 class VendorContactListCreateView(VendorItemMixin, generics.ListCreateAPIView):
