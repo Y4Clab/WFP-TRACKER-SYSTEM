@@ -44,11 +44,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.gis',
     'Accounts',
     'food_track',
     'drf_spectacular',
     'drf_yasg',
-    'rest_framework'
+    'rest_framework',
+    'rest_framework_gis',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -95,7 +98,7 @@ WSGI_APPLICATION = 'logitrack.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'logitrack',
         'USER': 'postgres',
         'PASSWORD': 'nuhusaidi',

@@ -13,6 +13,7 @@ router.register('cargo', CargoViewSet, basename="cargo")
 router.register('cargo-items', CargoItemsViewSet, basename="cargo items")
 router.register('regions', RegionViewSet, basename="regions")
 router.register('missions', MissionViewSet, basename="missions")
+router.register('routes', RouteViewSet, basename="routes")
 # router.register('vendor-missions', VendorMissionViewSet, basename="vendor missions")
 router.register('operation-regions', OperationRegionViewSet, basename="vendor operating regions")
 router.register('documents', DocumentsAndAgreementsViewSet, basename="vendor documents")
@@ -43,4 +44,13 @@ urlpatterns += [
     path('vendor/trucks-for-mission/<int:assignment_id>/', VendorTrucksForMissionDetailView.as_view(), name='vendor-trucks-for-mission-detail'),
     path('vendor/trucks-for-mission/<int:assignment_id>/cargo/', VendorTrucksForMissionCargoView.as_view(), name='vendor-trucks-for-mission-cargo'),
     path('vendor/truck-cargo/', VendorTruckCargoListView.as_view(), name='vendor-truck-cargo-list'),
+    
+    # Mission Routes
+    path('mission/<int:mission_id>/routes/', RouteViewSet.as_view({'get': 'mission_routes'}), name='mission-routes'),
+    
+    # GeoJSON routes endpoints
+    path('routes/geojson/', RouteViewSet.as_view({'get': 'geojson'}), name='routes-geojson'),
+    path('routes/<int:pk>/geojson/', RouteViewSet.as_view({'get': 'as_geojson'}), name='route-as-geojson'),
+    path('routes/<int:pk>/update-path/', RouteViewSet.as_view({'post': 'update_path'}), name='route-update-path'),
+    path('routes/<int:pk>/add-waypoint/', RouteViewSet.as_view({'post': 'add_waypoint'}), name='route-add-waypoint'),
 ]

@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from .models import *
 from food_track.serializers import *
+from rest_framework.decorators import action
 
 # Create your views here.
 
@@ -219,6 +220,195 @@ class DocumentsAndAgreementsViewSet(BaseViewSet):
     # permission_classes = [permissions.IsAuthenticated]
     create_serializer_class = DocumentsAndAgreementsCreateSerializer
     get_serializer_class_attr = DocumentsAndAgreementsGetSerializer
+
+
+class RouteViewSet(BaseViewSet):
+    """
+    API endpoints for managing Route resources.
+    
+    Routes represent paths from origin to destination for a mission,
+    with optimized waypoints and Google Maps API integration.
+    """
+    queryset = Route.objects.all()
+    # permission_classes = [permissions.IsAuthenticated]
+    create_serializer_class = RouteCreateSerializer
+    get_serializer_class_attr = RouteGetSerializer
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Override to use the detailed serializer for single object retrieval"""
+        instance = self.get_object()
+        serializer = RouteDetailSerializer(instance)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def mission_routes(self, request):
+        """Get all routes for a specific mission"""
+        mission_id = request.query_params.get('mission_id')
+        if not mission_id:
+            return Response(
+                {"error": "Mission ID is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        routes = Route.objects.filter(mission_id=mission_id)
+        serializer = RouteGetSerializer(routes, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def geojson(self, request):
+        """Get all routes as GeoJSON data"""
+        mission_id = request.query_params.get('mission_id')
+        
+        if mission_id:
+            routes = Route.objects.filter(mission_id=mission_id)
+        else:
+            routes = Route.objects.all()
+            
+        serializer = RouteGeoSerializer(routes, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def as_geojson(self, request, pk=None):
+        """Get a specific route as GeoJSON data"""
+        route = self.get_object()
+        serializer = RouteGeoSerializer(route)
+        return Response(serializer.data)
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new route and fetch data from Google Maps API"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Create the route object
+        route = serializer.save()
+        
+        # Here we would normally make a request to the Google Maps API
+        # This would be implemented with an external service class
+        # For now, we'll just update the route object with placeholder data
+        
+        # Simulated response data
+        # In a real implementation, this would come from the Google Maps API
+        sample_route_data = {
+            "status": "OK",
+            "routes": [
+                {
+                    "summary": "Sample route",
+                    "legs": [
+                        {
+                            "distance": {"text": "10 km", "value": 10000},
+                            "duration": {"text": "15 mins", "value": 900},
+                            "steps": [
+                                {"instructions": "Head north on Sample St", "distance": {"value": 500}}
+                            ]
+                        }
+                    ],
+                    "overview_polyline": {
+                        "points": "sample_polyline_data"
+                    }
+                }
+            ]
+        }
+        
+        # Update the route with the response data
+        route.route_data = sample_route_data
+        route.distance_meters = 10000  # From the sample data
+        route.duration_seconds = 900   # From the sample data
+        
+        # In a real implementation, we would also create a LineString for the path
+        # from the decoded polyline points
+        from django.contrib.gis.geos import LineString, Point
+        # This is just a placeholder - in reality, you'd decode the polyline from Google
+        sample_path_points = [
+            Point(-73.985, 40.748), # Example points for New York City
+            Point(-73.980, 40.745),
+            Point(-73.975, 40.740),
+            Point(-73.970, 40.735)
+        ]
+        route.path = LineString(sample_path_points, srid=4326)
+        
+        route.status = 'active'
+        route.save()
+        
+        # Return the updated route
+        serializer = RouteDetailSerializer(route)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'])
+    def update_path(self, request, pk=None):
+        """Update the route path with a LineString from encoded polyline"""
+        route = self.get_object()
+        
+        # In a real implementation, you would:
+        # 1. Get the encoded polyline from request.data
+        # 2. Decode it into a list of lat/lng points
+        # 3. Create a LineString from these points
+        
+        # For this example, we'll just use sample data
+        encoded_polyline = request.data.get('polyline', '')
+        
+        if not encoded_polyline:
+            return Response(
+                {"error": "Polyline data is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # This would be a real polyline decoder
+        def decode_polyline(polyline):
+            # Placeholder for actual polyline decoding logic
+            # In a real implementation, you would use Google's polyline algorithm
+            # For now, we'll just return some sample points
+            return [
+                (40.748, -73.985),
+                (40.745, -73.980),
+                (40.740, -73.975),
+                (40.735, -73.970)
+            ]
+            
+        # Decode the polyline to get points
+        points = decode_polyline(encoded_polyline)
+        
+        # Create a LineString from the points
+        from django.contrib.gis.geos import LineString, Point
+        line_points = [Point(lng, lat, srid=4326) for lat, lng in points]
+        route.path = LineString(line_points)
+        route.save()
+        
+        # Return the updated route
+        serializer = RouteGeoSerializer(route)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def add_waypoint(self, request, pk=None):
+        """Add a waypoint to an existing route"""
+        route = self.get_object()
+        
+        lat = request.data.get('latitude')
+        lng = request.data.get('longitude')
+        
+        if lat is None or lng is None:
+            return Response(
+                {"error": "Latitude and longitude are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Create a Point for the waypoint
+        from django.contrib.gis.geos import Point, MultiPoint
+        new_point = Point(float(lng), float(lat), srid=4326)
+        
+        # Add to existing waypoints or create new MultiPoint
+        if route.waypoints:
+            # Convert to list of points, add new one, and create new MultiPoint
+            point_list = list(route.waypoints)
+            point_list.append(new_point)
+            route.waypoints = MultiPoint(point_list)
+        else:
+            route.waypoints = MultiPoint(new_point)
+            
+        route.save()
+        
+        # Return the updated route
+        serializer = RouteDetailSerializer(route)
+        return Response(serializer.data)
 
 
 class VendorUserDataView(APIView):

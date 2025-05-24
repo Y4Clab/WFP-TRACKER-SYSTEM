@@ -3,6 +3,8 @@ import uuid
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
+from django.contrib.gis.db import models as gis_models
+from django.contrib.gis.geos import Point, LineString
 import os
 import datetime
 # Create your models here.
@@ -177,6 +179,7 @@ class Mission(models.Model):
     unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     type = models.CharField(max_length=20, choices=MISSION_TYPES)
+    # extra = models.CharField(max_length=255, null=True, blank=True)
     number_of_beneficiaries = models.PositiveIntegerField()
     description = models.TextField()
     dept_location = models.CharField(max_length=255)
@@ -209,4 +212,80 @@ class DocumentsAndAgreements(models.Model):
     unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE)
     document = models.FileField(upload_to='documents/', validators=[FileExtensionValidator(allowed_extensions=['pdf', 'doc', 'docx', 'jpg', 'png']),validate_document_file])
+
+class Route(models.Model):
+    TRAVEL_MODES = [
+        ('driving', 'Driving'),
+        ('walking', 'Walking'),
+        ('bicycling', 'Bicycling'),
+        ('transit', 'Transit'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('active', 'Active'),
+    ]
+    
+    unique_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    mission = models.ForeignKey(Mission, on_delete=models.CASCADE, related_name='routes')
+    
+    # Text representation of locations (human-readable addresses)
+    origin = models.CharField(max_length=255, help_text="Text representation of the origin address")
+    destination = models.CharField(max_length=255, help_text="Text representation of the destination address")
+    
+    # Spatial data fields
+    origin_point = gis_models.PointField(null=True, help_text="Geographic coordinates of the origin")
+    destination_point = gis_models.PointField(null=True, help_text="Geographic coordinates of the destination")
+    path = gis_models.LineStringField(null=True, blank=True, help_text="Full path geometry of the route")
+    
+    # Waypoints as GeoJSON-compatible field
+    waypoints = gis_models.MultiPointField(null=True, blank=True, help_text="Collection of waypoint locations")
+    
+    # Route preferences
+    travel_mode = models.CharField(max_length=20, choices=TRAVEL_MODES, default='driving')
+    avoid_tolls = models.BooleanField(default=False)
+    avoid_highways = models.BooleanField(default=False)
+    optimized_waypoints = models.BooleanField(default=True)
+    
+    # Additional route data from API
+    route_data = models.JSONField(blank=True, null=True, help_text="Additional data from Google Maps API")
+    distance_meters = models.PositiveIntegerField(blank=True, null=True)
+    duration_seconds = models.PositiveIntegerField(blank=True, null=True)
+    
+    # Status and timestamps
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Route for {self.mission.title}: {self.origin} to {self.destination}"
+    
+    @property
+    def origin_latitude(self):
+        """Return the latitude of the origin point"""
+        if self.origin_point:
+            return self.origin_point.y
+        return None
+    
+    @property
+    def origin_longitude(self):
+        """Return the longitude of the origin point"""
+        if self.origin_point:
+            return self.origin_point.x
+        return None
+    
+    @property
+    def destination_latitude(self):
+        """Return the latitude of the destination point"""
+        if self.destination_point:
+            return self.destination_point.y
+        return None
+    
+    @property
+    def destination_longitude(self):
+        """Return the longitude of the destination point"""
+        if self.destination_point:
+            return self.destination_point.x
+        return None
 

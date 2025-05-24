@@ -1,8 +1,10 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User
+from rest_framework_gis.serializers import GeoFeatureModelSerializer, GeometryField
 
 from Accounts.models import UserProfile
-from .models import *
+from .models import Vendor, Product, Driver, Contact, Truck, TrucksForMission, TruckCargoItem, Cargo, CargoItems, Region, Mission, VendorMission, OperationRegion, DocumentsAndAgreements, Route
 import os
 
 User = get_user_model()
@@ -471,3 +473,95 @@ class ComprehensiveMissionSerializer(serializers.ModelSerializer):
             result.append(assignment_data)
             
         return result
+
+class RouteCreateSerializer(serializers.ModelSerializer):
+    # Additional fields for accepting lat/long coordinates
+    origin_latitude = serializers.FloatField(write_only=True, required=False)
+    origin_longitude = serializers.FloatField(write_only=True, required=False)
+    destination_latitude = serializers.FloatField(write_only=True, required=False)
+    destination_longitude = serializers.FloatField(write_only=True, required=False)
+    
+    class Meta:
+        model = Route
+        fields = [
+            'mission', 'origin', 'destination', 
+            'origin_latitude', 'origin_longitude',
+            'destination_latitude', 'destination_longitude',
+            'travel_mode', 'avoid_tolls', 'avoid_highways', 'optimized_waypoints'
+        ]
+    
+    def create(self, validated_data):
+        """Create route with optional point data"""
+        # Extract coordinate data
+        origin_lat = validated_data.pop('origin_latitude', None)
+        origin_lng = validated_data.pop('origin_longitude', None)
+        dest_lat = validated_data.pop('destination_latitude', None)
+        dest_lng = validated_data.pop('destination_longitude', None)
+        
+        # Create the route instance
+        route = Route(**validated_data)
+        
+        # Set origin point if coordinates are provided
+        if origin_lat is not None and origin_lng is not None:
+            from django.contrib.gis.geos import Point
+            route.origin_point = Point(origin_lng, origin_lat, srid=4326)
+            
+        # Set destination point if coordinates are provided
+        if dest_lat is not None and dest_lng is not None:
+            from django.contrib.gis.geos import Point
+            route.destination_point = Point(dest_lng, dest_lat, srid=4326)
+        
+        route.save()
+        return route
+
+class RouteGetSerializer(serializers.ModelSerializer):
+    """Standard serializer for route data"""
+    mission = serializers.StringRelatedField()
+    origin_latitude = serializers.FloatField(read_only=True)
+    origin_longitude = serializers.FloatField(read_only=True)
+    destination_latitude = serializers.FloatField(read_only=True)
+    destination_longitude = serializers.FloatField(read_only=True)
+    
+    class Meta:
+        model = Route
+        fields = [
+            'id', 'unique_id', 'mission', 'origin', 'destination',
+            'origin_latitude', 'origin_longitude',
+            'destination_latitude', 'destination_longitude',
+            'travel_mode', 'avoid_tolls', 'avoid_highways',
+            'optimized_waypoints', 'distance_meters', 'duration_seconds',
+            'status', 'created_at', 'updated_at'
+        ]
+
+class RouteGeoSerializer(GeoFeatureModelSerializer):
+    """GeoJSON serializer for route data"""
+    mission = serializers.StringRelatedField()
+    
+    class Meta:
+        model = Route
+        geo_field = 'path'
+        fields = [
+            'id', 'unique_id', 'mission', 'origin', 'destination',
+            'origin_point', 'destination_point', 'waypoints',
+            'travel_mode', 'distance_meters', 'duration_seconds',
+            'status', 'created_at', 'updated_at'
+        ]
+
+class RouteDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for full route information"""
+    mission = MissionGetSerializer()
+    origin_latitude = serializers.FloatField(read_only=True)
+    origin_longitude = serializers.FloatField(read_only=True)
+    destination_latitude = serializers.FloatField(read_only=True)
+    destination_longitude = serializers.FloatField(read_only=True)
+    
+    class Meta:
+        model = Route
+        fields = [
+            'id', 'unique_id', 'mission', 'origin', 'destination',
+            'origin_latitude', 'origin_longitude',
+            'destination_latitude', 'destination_longitude',
+            'travel_mode', 'avoid_tolls', 'avoid_highways',
+            'optimized_waypoints', 'route_data', 'distance_meters', 
+            'duration_seconds', 'status', 'created_at', 'updated_at'
+        ]
